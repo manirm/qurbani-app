@@ -7,6 +7,7 @@ export interface Animal {
   total_shares: number;
   advance_price: number;
   actual_price: number | null;
+  tag_number: string | null;
 }
 
 export interface Participant {
@@ -27,6 +28,7 @@ export interface Participant {
     identifier: string;
     advance_price: number;
     actual_price: number | null;
+    tag_number: string | null;
   };
 }
 

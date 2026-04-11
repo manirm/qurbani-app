@@ -6,7 +6,7 @@ import {
   Plus, Receipt, DollarSign, Lock, LogOut, Download, PlusCircle, Scale, Wallet, Trash2, ArrowRight
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice, deleteAnimal, deleteExpense, deleteParticipant } from '@/app/actions';
+import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice, deleteAnimal, deleteExpense, deleteParticipant, updateAnimalTag } from '@/app/actions';
 import type { AnimalStatus, Participant, Expense, AnimalType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -287,9 +287,9 @@ export default function AdminPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2 items-center">
-                      <div className="flex-1">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Actual Price Per Share</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Actual Price</p>
                         <input 
                           type="number"
                           placeholder={`Est: $${a.advance_price}`}
@@ -301,6 +301,19 @@ export default function AdminPage() {
                             }
                           }}
                           className="w-full bg-white border border-slate-200 p-2 rounded-xl outline-none focus:border-secondary font-black text-primary text-sm"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Farm Tag #</p>
+                        <input 
+                          type="text"
+                          placeholder="e.g. 842"
+                          defaultValue={a.tag_number || ''}
+                          onBlur={async (e) => {
+                              await updateAnimalTag(a.id, e.target.value);
+                              fetchAllData();
+                          }}
+                          className="w-full bg-white border border-slate-200 p-2 rounded-xl outline-none focus:border-secondary font-black text-primary text-sm uppercase"
                         />
                       </div>
                     </div>

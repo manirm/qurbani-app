@@ -113,6 +113,21 @@ export async function finalizeAnimalPrice(animalId: string, actualPrice: number)
   return { success: true };
 }
 
+export async function updateAnimalTag(animalId: string, tagNumber: string) {
+  const supabase = await createClient();
+  
+  const { error } = await supabase
+    .from('animals')
+    .update({ tag_number: tagNumber })
+    .eq('id', animalId);
+
+  if (error) return { error: error.message };
+  
+  revalidatePath('/admin');
+  revalidatePath('/lookup');
+  return { success: true };
+}
+
 export async function addExpense(formData: FormData) {
   const supabase = await createClient();
   const description = formData.get('description') as string;
