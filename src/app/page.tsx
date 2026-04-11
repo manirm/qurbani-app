@@ -3,6 +3,7 @@ import ClientPage from './client-page';
 import { createClient } from '@/utils/supabase/server';
 import type { AnimalStatus } from '@/lib/types';
 
+
 // Mock data for initial development/fallback
 const MOCK_ANIMALS: AnimalStatus[] = [
   { id: '1', type: 'Cow', total_shares: 7, filled_shares: 4, price_per_share: 350 },
@@ -10,6 +11,7 @@ const MOCK_ANIMALS: AnimalStatus[] = [
   { id: '3', type: 'Goat', total_shares: 1, filled_shares: 0, price_per_share: 280 },
   { id: '4', type: 'Sheep', total_shares: 1, filled_shares: 1, price_per_share: 300 },
 ];
+
 
 async function getAnimals(): Promise<AnimalStatus[]> {
   try {
@@ -28,8 +30,10 @@ async function getAnimals(): Promise<AnimalStatus[]> {
   }
 }
 
+
 export default async function Home() {
   const animals = await getAnimals();
+
 
   return (
     <main className="min-h-screen">
@@ -37,7 +41,7 @@ export default async function Home() {
       <section className="relative pt-20 pb-32 overflow-hidden emerald-gradient text-white">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-10 pointer-events-none" />
         <div className="container mx-auto px-6 relative z-10 text-center">
-          <motion-wrapper>
+          <div>
             <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
               Community <span className="text-secondary tracking-wide">Qurbani</span> 2026
             </h1>
@@ -45,16 +49,18 @@ export default async function Home() {
               Join your community in fulfilling the sacred tradition. 
               Transparent, organized, and shared with love.
             </p>
-          </motion-wrapper>
+          </div>
           
           <EidCountdown />
         </div>
       </section>
 
+
       {/* Main Content */}
       <section className="container mx-auto px-6 -mt-20 pb-20">
         <ClientPage initialAnimals={animals} />
       </section>
+
 
       {/* Footer */}
       <footer className="py-12 bg-primary text-emerald-100/40 border-t border-white/5">
@@ -65,6 +71,7 @@ export default async function Home() {
     </main>
   );
 }
+
 
 // Simple wrapper to handle server/client transition for animations
 function motion_wrapper({ children }: { children: React.ReactNode }) {
