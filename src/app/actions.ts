@@ -178,3 +178,14 @@ export async function deleteExpense(expenseId: string) {
   revalidatePath('/expenses');
   return { success: true };
 }
+
+export async function deleteParticipant(participantId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from('participants').delete().eq('id', participantId);
+  if (error) return { error: error.message };
+  
+  revalidatePath('/');
+  revalidatePath('/admin');
+  revalidatePath('/lookup');
+  return { success: true };
+}

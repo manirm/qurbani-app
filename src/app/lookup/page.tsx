@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Search, User, Mail, Phone, Calculator, CheckCircle, Clock } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { deleteParticipant } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -22,11 +23,11 @@ export default function LookupPage() {
     
     const supabase = createClient();
     
-    // 1. Fetch participants (Search by email or phone)
+    // 1. Fetch participants (Search by name, email, or phone)
     const { data: participants } = await supabase
       .from('participants')
       .select('*, animals(type, identifier, advance_price, actual_price)')
-      .or(`user_email.eq.${query.toLowerCase()},phone.eq.${query}`);
+      .or(`user_email.ilike.%${query.toLowerCase()}%,phone.ilike.%${query}%,user_name.ilike.%${query}%`);
     
     // 2. Fetch all data for community dividends
     const { data: allExpenses } = await supabase.from('expenses').select('*');
@@ -71,7 +72,7 @@ export default function LookupPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="email@example.com or 309-XXX-XXXX"
+                placeholder="Name, Email, or Phone (e.g. Manir, 309-XXX...)"
                 className="w-full bg-white/10 backdrop-blur-xl border-2 border-white/20 focus:border-secondary/50 p-6 rounded-[2rem] outline-none text-xl transition-all placeholder:text-white/30 text-white shadow-2xl"
               />
               <button 
@@ -147,11 +148,26 @@ export default function LookupPage() {
                                 <span>${p.amount_paid.toFixed(2)}</span>
                               </div>
                             </div>
-                            <div className={cn(
-                              "text-center py-3 rounded-2xl font-black text-sm tracking-widest uppercase",
-                              balance <= 0 ? "bg-emerald-600 text-white" : "bg-red-50 text-red-600 border border-red-100"
-                            )}>
-                              {balance <= 0 ? 'Fully Paid' : `Balance: $${balance.toFixed(2)}`}
+                            <div className="space-y-2">
+                              <div className={cn(
+                                "text-center py-3 rounded-2xl font-black text-sm tracking-widest uppercase",
+                                balance <= 0 ? "bg-emerald-600 text-white" : "bg-red-50 text-red-600 border border-red-100"
+                              )}>
+                                {balance <= 0 ? 'Fully Paid' : `Balance: $${balance.toFixed(2)}`}
+                              </div>
+                              {p.amount_paid === 0 && (
+                                <button
+                                  onClick={async () => {
+                                    if (confirm('Are you sure you want to withdraw this share? This action cannot be undone.')) {
+                                      await deleteParticipant(p.id);
+                                      setResults(prev => prev.filter(item => item.id !== p.id));
+                                    }
+                                  }}
+                                  className="w-full text-center py-2 text-[10px] uppercase tracking-widest font-bold text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                                >
+                                  Withdraw Share
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

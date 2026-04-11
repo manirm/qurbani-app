@@ -6,7 +6,7 @@ import {
   Plus, Receipt, DollarSign, Lock, LogOut, Download, PlusCircle, Scale, Wallet, Trash2, ArrowRight
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice, deleteAnimal, deleteExpense } from '@/app/actions';
+import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice, deleteAnimal, deleteExpense, deleteParticipant } from '@/app/actions';
 import type { AnimalStatus, Participant, Expense, AnimalType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -223,7 +223,7 @@ export default function AdminPage() {
                                   <div className="font-bold text-primary">{p.beneficiary_name}</div>
                                   <div className="flex justify-between mt-1 text-slate-500">
                                     <span>{p.animals?.identifier} ({p.animals?.type})</span>
-                                    <span className="font-black text-emerald-700">Cash Paid: 
+                                    <span className="font-black text-emerald-700 flex items-center">Cash Paid: 
                                       <input 
                                         type="number"
                                         defaultValue={p.amount_paid}
@@ -231,8 +231,11 @@ export default function AdminPage() {
                                           await updateParticipantPayment(p.id, parseFloat(e.target.value));
                                           fetchAllData();
                                         }}
-                                        className="w-16 ml-1 bg-white border border-slate-200 text-right rounded px-1 outline-none focus:border-secondary"
+                                        className="w-16 ml-1 mr-2 bg-white border border-slate-200 text-right rounded px-1 outline-none focus:border-secondary"
                                       />
+                                      <button onClick={async () => { if(confirm('Remove this share completely?')) { await deleteParticipant(p.id); fetchAllData(); } }} className="text-red-300 hover:text-red-600 transition-colors" title="Delete Booking">
+                                        <Trash2 size={14} />
+                                      </button>
                                     </span>
                                   </div>
                                 </div>
