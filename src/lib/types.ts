@@ -12,12 +12,23 @@ export interface Participant {
   animal_id: string;
   user_name: string;
   user_email: string;
+  phone: string;
+  beneficiary_name: string;
   shares_taken: number;
   distribution_pref: 'keep_all' | 'donate_third' | 'donate_all';
+  amount_paid: number;
   paid: boolean;
   created_at: string;
 }
 
 export interface AnimalStatus extends Animal {
   filled_shares: number;
+}
+
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  item_type: 'shared' | 'individual';
+  created_at: string;
 }

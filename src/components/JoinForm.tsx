@@ -1,8 +1,8 @@
 'use client';
 
 import { useFormStatus } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, CreditCard, Heart } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { X, Send, CreditCard, Heart, Phone, UserPlus } from 'lucide-react';
 import { joinGroup } from '@/app/actions';
 import { useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -64,9 +64,9 @@ export default function JoinForm({ animalId, onClose, onSuccess }: JoinFormProps
           <X size={20} />
         </button>
 
-        <div className="mb-8">
+        <div className="mb-6">
           <h2 className="text-3xl font-bold text-primary mb-2 tracking-tight">Reserve Share</h2>
-          <p className="text-foreground/60 text-sm">Please provide your details to confirm your participation.</p>
+          <p className="text-foreground/60 text-sm">Please provide the details for your Qurbani share.</p>
         </div>
 
         {error && (
@@ -75,35 +75,60 @@ export default function JoinForm({ animalId, onClose, onSuccess }: JoinFormProps
           </div>
         )}
 
-        <form action={handleSubmit} ref={formRef} className="space-y-6">
+        <form action={handleSubmit} ref={formRef} className="space-y-4">
           <input type="hidden" name="animalId" value={animalId} />
           
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[50vh] overflow-y-auto px-1">
             <div>
-              <label className="block text-xs font-bold text-secondary uppercase tracking-widest mb-2 ml-1">Full Name</label>
+              <label className="block text-xs font-bold text-secondary uppercase tracking-widest mb-2 ml-1">Your Name</label>
               <input
                 required
                 name="name"
                 className="w-full bg-foreground/5 border-2 border-transparent focus:border-secondary/30 focus:bg-white p-4 rounded-2xl outline-none transition-all duration-300"
-                placeholder="Ex. Ahmed Khan"
+                placeholder="Requested by..."
               />
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-secondary uppercase tracking-widest mb-2 ml-1">Email</label>
+                <input
+                  required
+                  type="email"
+                  name="email"
+                  className="w-full bg-foreground/5 border-2 border-transparent focus:border-secondary/30 focus:bg-white p-4 rounded-2xl outline-none transition-all duration-300"
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-secondary uppercase tracking-widest mb-2 ml-1 flex items-center gap-1">
+                  <Phone size={12} /> Phone Number
+                </label>
+                <input
+                  required
+                  name="phone"
+                  className="w-full bg-foreground/5 border-2 border-transparent focus:border-secondary/30 focus:bg-white p-4 rounded-2xl outline-none transition-all duration-300"
+                  placeholder="309-XXX-XXXX"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-xs font-bold text-secondary uppercase tracking-widest mb-2 ml-1">Email Address</label>
+              <label className="block text-xs font-bold text-secondary uppercase tracking-widest mb-2 ml-1 flex items-center gap-1">
+                <UserPlus size={12} /> Share for (Name & Father's Name)
+              </label>
               <input
                 required
-                type="email"
-                name="email"
+                name="beneficiary"
                 className="w-full bg-foreground/5 border-2 border-transparent focus:border-secondary/30 focus:bg-white p-4 rounded-2xl outline-none transition-all duration-300"
-                placeholder="ahmed@example.com"
+                placeholder="Full Name son of/daughter of..."
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-secondary uppercase tracking-widest mb-2 ml-1 flex items-center gap-2">
                 <Heart size={12} className="text-secondary" />
-                Distribution Preference
+                Meat Distribution
               </label>
               <select
                 name="distribution"
@@ -116,15 +141,15 @@ export default function JoinForm({ animalId, onClose, onSuccess }: JoinFormProps
             </div>
           </div>
 
-          <div className="p-6 bg-secondary/5 rounded-[2rem] border border-secondary/10">
+          <div className="p-5 bg-secondary/5 rounded-[2rem] border border-secondary/10">
             <div className="flex items-start gap-3">
               <CreditCard className="text-secondary mt-1 shrink-0" size={20} />
               <div>
-                <h4 className="text-sm font-bold text-primary mb-1 tracking-tight">Payment Information</h4>
-                <p className="text-[12px] text-foreground/50 leading-relaxed">
-                  After joining, please send your payment via **Zelle** to: <br/>
-                  <span className="text-secondary font-mono font-bold font-sm">payment@communityqurbani.org</span> <br/>
-                  Payment must be received within 24 hours to confirm your spot.
+                <h4 className="text-sm font-bold text-primary mb-1 tracking-tight font-sm tracking-tight mb-1">Payment: Br. Mustafizur Rahman</h4>
+                <p className="text-[11px] text-foreground/50 leading-relaxed">
+                  Paypal: <span className="text-primary font-bold">309-868-4330</span> <br/>
+                  Zelle: <span className="text-primary font-bold">mustafizur@yahoo.com</span> <br/>
+                  Please confirm payment within 24 hours.
                 </p>
               </div>
             </div>
