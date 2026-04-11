@@ -19,6 +19,11 @@ export interface Participant {
   amount_paid: number;
   paid: boolean;
   created_at: string;
+  // Joined animal data
+  animals?: {
+    type: AnimalType;
+    price_per_share: number;
+  };
 }
 
 export interface AnimalStatus extends Animal {
