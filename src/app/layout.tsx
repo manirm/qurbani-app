@@ -66,7 +66,7 @@ export default function RootLayout({
             </div>
 
             <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-              <p className="text-[10px] text-emerald-100/30 uppercase tracking-widest font-black">© 2026 Community Qurbani Project • Built for the Ummah</p>
+              <p className="text-[10px] text-emerald-100/30 uppercase tracking-widest font-black">© 2026 Community Qurbani Project • Designed and Developed by Mohammed Maniruzzaman</p>
               <div className="flex items-center gap-2 text-secondary/40">
                 <Heart size={14} fill="currentColor" />
                 <span className="text-[10px] font-black uppercase tracking-widest italic">Barakah in Unity</span>
