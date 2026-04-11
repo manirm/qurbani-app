@@ -7,10 +7,10 @@ import { UserSearch, Receipt, ArrowRight } from 'lucide-react';
 
 // Mock data for fallback
 const MOCK_ANIMALS: AnimalStatus[] = [
-  { id: '1', type: 'Cow', total_shares: 7, filled_shares: 4, price_per_share: 350 },
-  { id: '2', type: 'Cow', total_shares: 7, filled_shares: 7, price_per_share: 350 },
-  { id: '3', type: 'Goat', total_shares: 1, filled_shares: 0, price_per_share: 280 },
-  { id: '4', type: 'Sheep', total_shares: 1, filled_shares: 1, price_per_share: 300 },
+  { id: '1', type: 'Cow', identifier: 'Cow-1', total_shares: 7, filled_shares: 4, advance_price: 500, actual_price: null },
+  { id: '2', type: 'Cow', identifier: 'Cow-2', total_shares: 7, filled_shares: 7, advance_price: 500, actual_price: null },
+  { id: '3', type: 'Goat', identifier: 'Goat-1', total_shares: 1, filled_shares: 0, advance_price: 550, actual_price: null },
+  { id: '4', type: 'Sheep', identifier: 'Sheep-1', total_shares: 1, filled_shares: 1, advance_price: 400, actual_price: null },
 ];
 
 async function getAnimals(): Promise<AnimalStatus[]> {
