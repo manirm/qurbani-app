@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
+import type { AnimalType } from '@/lib/types';
 
 export async function joinGroup(formData: FormData) {
   const supabase = await createClient();
@@ -58,20 +59,80 @@ export async function joinGroup(formData: FormData) {
   return { success: true };
 }
 
+export async function addAnimal(type: AnimalType) {
+  const supabase = await createClient();
+  
+  // 1. Get current count for this type to auto-number
+  const { count } = await supabase
+    .from('animals')
+    .select('*', { count: 'exact', head: true })
+    .eq('type', type);
+
+  const nextNumber = (count || 0) + 1;
+  const identifier = `${type}-${nextNumber}`;
+
+  // 2. Set default suggested advance prices
+  const defaults: Record<AnimalType, { shares: number, advance: number }> = {
+    'Cow': { shares: 7, advance: 500 },
+    'Goat': { shares: 1, advance: 550 },
+    'Sheep': { shares: 1, advance: 400 },
+    'Camel': { shares: 7, advance: 600 }
+  };
+
+  const { error } = await supabase
+    .from('animals')
+    .insert([{
+      type,
+      identifier,
+      total_shares: defaults[type].shares,
+      advance_price: defaults[type].advance,
+      actual_price: null // TBD
+    }]);
+
+  if (error) return { error: error.message };
+  
+  revalidatePath('/');
+  revalidatePath('/admin');
+  return { success: true };
+}
+
+export async function finalizeAnimalPrice(animalId: string, actualPrice: number) {
+  const supabase = await createClient();
+  
+  const { error } = await supabase
+    .from('animals')
+    .update({ actual_price: actualPrice })
+    .eq('id', animalId);
+
+  if (error) return { error: error.message };
+  
+  revalidatePath('/');
+  revalidatePath('/admin');
+  revalidatePath('/lookup');
+  return { success: true };
+}
+
 export async function addExpense(formData: FormData) {
   const supabase = await createClient();
   const description = formData.get('description') as string;
   const amount = parseFloat(formData.get('amount') as string);
   const itemType = formData.get('itemType') as string;
+  const payerId = formData.get('payerId') as string | null;
 
   const { error } = await supabase
     .from('expenses')
-    .insert([{ description, amount, item_type: itemType }]);
+    .insert([{ 
+      description, 
+      amount, 
+      item_type: itemType,
+      payer_id: payerId === "" ? null : payerId
+    }]);
 
   if (error) return { error: error.message };
   
   revalidatePath('/admin');
   revalidatePath('/expenses');
+  revalidatePath('/lookup');
   return { success: true };
 }
 

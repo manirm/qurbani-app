@@ -15,6 +15,8 @@ export default function ClientPage({ initialAnimals }: ClientPageProps) {
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const selectedAnimal = initialAnimals.find(a => a.id === selectedAnimalId);
+
   const handleJoin = (id: string) => {
     setSelectedAnimalId(id);
   };
@@ -38,9 +40,10 @@ export default function ClientPage({ initialAnimals }: ClientPageProps) {
       </div>
 
       <AnimatePresence>
-        {selectedAnimalId && (
+        {selectedAnimalId && selectedAnimal && (
           <JoinForm 
             animalId={selectedAnimalId} 
+            advancePrice={selectedAnimal.advance_price}
             onClose={() => setSelectedAnimalId(null)}
             onSuccess={handleSuccess}
           />
@@ -56,7 +59,7 @@ export default function ClientPage({ initialAnimals }: ClientPageProps) {
             <CheckCircle className="text-emerald-200" />
             <div>
               <p className="font-bold">Booking Submitted!</p>
-              <p className="text-xs text-emerald-100/80">Please check your email for payment instructions.</p>
+              <p className="text-xs text-emerald-100/80">Please check the booking lookup page for your balance.</p>
             </div>
           </motion.div>
         )}

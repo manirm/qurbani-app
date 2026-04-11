@@ -10,6 +10,7 @@ export default function LookupPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [allParticipants, setAllParticipants] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searched, setSearched] = useState(false);
 
@@ -24,25 +25,32 @@ export default function LookupPage() {
     // 1. Fetch participants (Search by email or phone)
     const { data: participants } = await supabase
       .from('participants')
-      .select('*, animals(type, price_per_share)')
+      .select('*, animals(type, identifier, advance_price, actual_price)')
       .or(`user_email.eq.${query.toLowerCase()},phone.eq.${query}`);
     
-    // 2. Fetch shared expenses for individual dividend calculation
+    // 2. Fetch all data for community dividends
     const { data: allExpenses } = await supabase.from('expenses').select('*');
-    const { data: allParticipants } = await supabase.from('participants').select('id');
+    const { data: totalParticipants } = await supabase.from('participants').select('id');
     
-    const totalSharedExpenses = (allExpenses || [])
-      .filter(e => e.item_type === 'shared')
+    const totalCommunityExpenses = (allExpenses || [])
       .reduce((sum, e) => sum + Number(e.amount), 0);
-    const totalSharesCount = allParticipants?.length || 0;
-    const dividendPerShare = totalSharesCount > 0 ? totalSharedExpenses / totalSharesCount : 0;
+    const totalSharesCount = totalParticipants?.length || 0;
+    const dividendPerShare = totalSharesCount > 0 ? totalCommunityExpenses / totalSharesCount : 0;
+
+    // 3. Calculate expense credits for the searched user
+    // We find all expenses where payer_id is in any of the results' IDs
+    const userResultIds = (participants || []).map(p => p.id);
+    const userExpenseCredits = (allExpenses || [])
+      .filter(e => e.payer_id && userResultIds.includes(e.payer_id))
+      .reduce((sum, e) => sum + Number(e.amount), 0);
 
     setResults(participants || []);
-    setExpenses([{ id: 'dividend', amount: dividendPerShare }]);
+    setExpenses([{ id: 'dividend', amount: dividendPerShare, userCredits: userExpenseCredits }]);
     setIsSearching(false);
   };
 
   const dividendPerShare = expenses[0]?.amount || 0;
+  const userExpenseCredits = expenses[0]?.userCredits || 0;
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -91,8 +99,9 @@ export default function LookupPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-6">
                     {results.map((p) => {
-                      const basePrice = p.animals?.price_per_share || 350;
+                      const basePrice = p.animals?.actual_price || p.animals?.advance_price || 500;
                       const totalDue = basePrice + dividendPerShare;
+                      // Note: expense credits are calculated globally for the user in the summary
                       const balance = totalDue - p.amount_paid;
                       
                       return (
@@ -101,7 +110,7 @@ export default function LookupPage() {
                             "absolute top-0 right-0 px-6 py-2 rounded-bl-3xl text-[10px] font-black uppercase tracking-widest",
                             p.paid ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
                           )}>
-                            {p.paid ? 'Confirmed' : 'Pending Payment'}
+                            {p.animals?.actual_price ? 'Price Finalized' : 'Estimate Only'}
                           </div>
                           
                           <div className="grow">
@@ -111,38 +120,30 @@ export default function LookupPage() {
                               </div>
                               <div>
                                 <h3 className="text-xl font-bold text-primary leading-none mb-1">{p.beneficiary_name}</h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Reserved by {p.user_name}</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Reserved for {p.animals?.identifier || p.animals?.type}</p>
                               </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Assignment</p>
-                                <p className="font-bold text-primary">{p.animals?.type} Share</p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Base Share Price</p>
+                                <p className="font-bold text-primary">${basePrice.toFixed(2)}</p>
                               </div>
                               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Distribution</p>
-                                <p className="font-bold text-primary capitalize">{p.distribution_pref.replace('_', ' ')}</p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Community Expense Share</p>
+                                <p className="font-bold text-primary">${dividendPerShare.toFixed(2)}</p>
                               </div>
                             </div>
                           </div>
 
                           <div className="md:w-64 flex flex-col justify-center border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 md:pl-8">
                             <div className="space-y-2 mb-4">
-                              <div className="flex justify-between text-xs text-slate-400">
-                                <span>Share Price:</span>
-                                <span>${basePrice.toFixed(2)}</span>
-                              </div>
-                              <div className="flex justify-between text-xs text-slate-400">
-                                <span>Dividend Share:</span>
-                                <span>${dividendPerShare.toFixed(2)}</span>
-                              </div>
                               <div className="flex justify-between text-xs text-slate-600 font-bold">
-                                <span>Total Due:</span>
+                                <span>Share Total:</span>
                                 <span>${totalDue.toFixed(2)}</span>
                               </div>
                               <div className="flex justify-between text-xs text-emerald-600 font-bold">
-                                <span>Paid:</span>
+                                <span>Cash Paid:</span>
                                 <span>${p.amount_paid.toFixed(2)}</span>
                               </div>
                             </div>
@@ -150,7 +151,7 @@ export default function LookupPage() {
                               "text-center py-3 rounded-2xl font-black text-sm tracking-widest uppercase",
                               balance <= 0 ? "bg-emerald-600 text-white" : "bg-red-50 text-red-600 border border-red-100"
                             )}>
-                              {balance <= 0 ? 'Fully Paid' : `Balance Due: $${balance.toFixed(2)}`}
+                              {balance <= 0 ? 'Fully Paid' : `Balance: $${balance.toFixed(2)}`}
                             </div>
                           </div>
                         </div>
@@ -162,21 +163,32 @@ export default function LookupPage() {
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-secondary/20">
                       <div className="flex items-center gap-2 mb-6 text-primary">
                         <Calculator className="text-secondary" />
-                        <h3 className="text-xl font-bold tracking-tight">Summary</h3>
+                        <h3 className="text-xl font-bold tracking-tight">Consolidated Account</h3>
                       </div>
                       <div className="space-y-4">
                         <div className="flex justify-between font-medium text-slate-500">
                           <span>Total Shares</span>
                           <span className="text-primary font-bold">{results.length}</span>
                         </div>
+                        {userExpenseCredits > 0 && (
+                          <div className="flex justify-between font-medium text-emerald-600">
+                            <span>Expense Credits</span>
+                            <span className="font-bold">-${userExpenseCredits.toFixed(2)}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between font-black text-2xl text-primary pt-4 border-t border-slate-100">
-                          <span>Total Balance</span>
-                          <span className="text-red-500">${results.reduce((s, p) => s + (p.animals?.price_per_share + dividendPerShare - p.amount_paid), 0).toFixed(2)}</span>
+                          <span>Overall Due</span>
+                          <span className="text-red-500">
+                            ${Math.max(0, results.reduce((s, p) => {
+                               const base = p.animals?.actual_price || p.animals?.advance_price || 500;
+                               return s + (base + dividendPerShare - p.amount_paid);
+                            }, 0) - userExpenseCredits).toFixed(2)}
+                          </span>
                         </div>
                         <div className="pt-6">
                            <div className="p-4 bg-secondary/5 rounded-2xl border border-secondary/10 flex gap-3 italic text-[11px] text-slate-500 leading-relaxed font-medium">
                             <Clock size={16} className="text-secondary shrink-0 mt-0.5" />
-                            <p>Payments are updated manually by the treasurer. If you just paid, please allow up to 24 hours for reflecting.</p>
+                            <p>Final prices are finalized by admin after slaughter. Participant-paid expenses are credited automatically to your overall account balance.</p>
                           </div>
                         </div>
                       </div>
@@ -189,7 +201,7 @@ export default function LookupPage() {
                     <Search className="text-slate-300" size={32} />
                   </div>
                   <h3 className="text-2xl font-bold text-primary mb-2">No bookings found</h3>
-                  <p className="text-slate-400 max-w-sm mx-auto">We couldn't find any reservations for <strong>{query}</strong>. Please check the spelling or try your phone number.</p>
+                  <p className="text-slate-400 max-w-sm mx-auto">Check if you used a different email or phone. If you just registered, your details will appear here shortly.</p>
                 </div>
               )}
             </motion.div>

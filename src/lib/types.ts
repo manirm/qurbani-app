@@ -3,8 +3,10 @@ export type AnimalType = 'Cow' | 'Goat' | 'Sheep' | 'Camel';
 export interface Animal {
   id: string;
   type: AnimalType;
+  identifier: string; // e.g. "Cow-1"
   total_shares: number;
-  price_per_share: number;
+  advance_price: number;
+  actual_price: number | null;
 }
 
 export interface Participant {
@@ -22,7 +24,9 @@ export interface Participant {
   // Joined animal data
   animals?: {
     type: AnimalType;
-    price_per_share: number;
+    identifier: string;
+    advance_price: number;
+    actual_price: number | null;
   };
 }
 
@@ -35,5 +39,6 @@ export interface Expense {
   description: string;
   amount: number;
   item_type: 'shared' | 'individual';
+  payer_id: string | null;
   created_at: string;
 }

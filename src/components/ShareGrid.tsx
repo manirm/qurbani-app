@@ -26,6 +26,9 @@ export default function ShareGrid({ animal, onJoin }: ShareGridProps) {
 
       <div className="flex justify-between items-start mb-6">
         <div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mb-1">
+            {animal.identifier || 'New Group'}
+          </div>
           <h3 className="text-2xl font-bold text-primary capitalize tracking-tight">
             {animal.type}
           </h3>
@@ -35,10 +38,10 @@ export default function ShareGrid({ animal, onJoin }: ShareGridProps) {
         </div>
         <div className="text-right">
           <div className="text-lg font-bold text-secondary">
-            ${animal.price_per_share}
+            ${animal.advance_price}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-foreground/40 font-semibold">
-            Per Share
+            Suggested Advance
           </div>
         </div>
       </div>
@@ -67,6 +70,11 @@ export default function ShareGrid({ animal, onJoin }: ShareGridProps) {
           )}>
             {isFull ? "Fully Booked" : `${remaining} Slots Available`}
           </span>
+          {animal.actual_price && (
+             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded-md">
+                Price Finalized
+             </span>
+          )}
         </div>
 
         <button
