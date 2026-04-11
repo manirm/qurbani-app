@@ -86,7 +86,8 @@ export async function addAnimal(type: AnimalType) {
       identifier,
       total_shares: defaults[type].shares,
       advance_price: defaults[type].advance,
-      actual_price: null // TBD
+      actual_price: null, // TBD
+      price_per_share: defaults[type].advance // For backward DB compatibility
     }]);
 
   if (error) return { error: error.message };
@@ -148,5 +149,32 @@ export async function updateParticipantPayment(participantId: string, amount: nu
   
   revalidatePath('/admin');
   revalidatePath('/lookup');
+  return { success: true };
+}
+
+export async function deleteAnimal(animalId: string) {
+  const supabase = await createClient();
+  
+  // Only allow deleting if no shares are taken (for safety)
+  const { data: status } = await supabase.from('animal_status').select('filled_shares').eq('id', animalId).single();
+  if (status && status.filled_shares > 0) {
+    return { error: 'Cannot delete: This animal has active participants.' };
+  }
+
+  const { error } = await supabase.from('animals').delete().eq('id', animalId);
+  if (error) return { error: error.message };
+  
+  revalidatePath('/');
+  revalidatePath('/admin');
+  return { success: true };
+}
+
+export async function deleteExpense(expenseId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+  if (error) return { error: error.message };
+  
+  revalidatePath('/admin');
+  revalidatePath('/expenses');
   return { success: true };
 }

@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Users, UserCheck, CreditCard, Printer, 
-  Plus, Receipt, DollarSign, Lock, LogOut, Download, PlusCircle, Scale, Wallet
+  Plus, Receipt, DollarSign, Lock, LogOut, Download, PlusCircle, Scale, Wallet, Trash2, ArrowRight
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice } from '@/app/actions';
+import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice, deleteAnimal, deleteExpense } from '@/app/actions';
 import type { AnimalStatus, Participant, Expense, AnimalType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
@@ -237,6 +237,14 @@ export default function AdminPage() {
                                   </div>
                                 </div>
                               ))}
+                              
+                              {/* Participant Add Credit Quick Button */}
+                              <form action={async (fd) => { fd.append('payerId', c.shares[0].id); await addExpense(fd); fetchAllData(); }} className="flex gap-2 items-center mt-2 p-2 bg-emerald-50 rounded-xl border border-emerald-100">
+                                 <input name="description" required placeholder="Misc Item" className="w-full text-[10px] p-2 rounded-lg outline-none focus:ring-1 focus:ring-emerald-400" />
+                                 <input name="amount" type="number" step="0.01" required placeholder="$ Amount" className="w-20 text-[10px] p-2 rounded-lg outline-none focus:ring-1 focus:ring-emerald-400 font-bold" />
+                                 <input type="hidden" name="itemType" value="shared" />
+                                 <button title="Apply as credit against their balance" className="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700 transition-colors"><Plus size={12} /></button>
+                              </form>
                             </div>
                           </td>
                           <td className="px-6 py-6 text-right font-black text-slate-400 text-sm italic">${totalCost.toFixed(2)}</td>
@@ -264,10 +272,17 @@ export default function AdminPage() {
               </div>
               <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                 {data.animals.map(a => (
-                  <div key={a.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 group">
+                  <div key={a.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-slate-300 transition-all">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-[10px] font-black uppercase tracking-widest text-primary">{a.identifier}</span>
-                      <span className="text-[10px] font-bold text-slate-400 italic">Shares: {a.filled_shares}/{a.total_shares}</span>
+                      <div className="flex gap-2 items-center">
+                        <span className="text-[10px] font-bold text-slate-400 italic">Shares: {a.filled_shares}/{a.total_shares}</span>
+                        {a.filled_shares === 0 && (
+                          <button onClick={async () => { await deleteAnimal(a.id); fetchAllData(); }} className="text-red-300 hover:text-red-600 transition-colors px-1" title="Delete Unused Animal">
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="flex gap-2 items-center">
                       <div className="flex-1">
@@ -294,23 +309,22 @@ export default function AdminPage() {
             <section className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
               <div className="flex items-center gap-3 mb-8">
                 <Receipt className="text-secondary" />
-                <h3 className="text-xl font-bold text-primary tracking-tight">Add Expense</h3>
+              <h3 className="text-xl font-bold text-primary tracking-tight">Main Community Expenses</h3>
               </div>
-              <form action={async (fd) => { await addExpense(fd); fetchAllData(); }} className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Paid By (Optional)</label>
-                  <select name="payerId" className="w-full bg-slate-100 p-3 rounded-xl outline-none focus:bg-white border-2 border-transparent transition-all text-[11px] font-bold text-primary">
-                    <option value="">Community (Direct Fund)</option>
-                    {data.participants.map(p => (
-                      <option key={p.id} value={p.id}>{p.user_name} ({p.beneficiary_name})</option>
-                    ))}
-                  </select>
-                </div>
-                <input name="description" required placeholder="Description (e.g. Transport)" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:bg-white border-2 border-transparent focus:border-emerald-100 transition-all text-sm" />
+              <form action={async (fd) => { await addExpense(fd); fetchAllData(); }} className="space-y-4 mb-6">
+                <input name="description" required placeholder="Description (e.g. Slaughterhouse fee)" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:bg-white border-2 border-transparent focus:border-emerald-100 transition-all text-sm" />
+                <select name="payerId" className="w-full bg-slate-100 p-3 rounded-xl outline-none focus:bg-white border-2 border-transparent transition-all text-[11px] font-bold text-primary">
+                  <option value="">Paid By: Community (Direct Fund)</option>
+                  {data.participants.map(p => (
+                    <option key={p.id} value={p.id}>Paid By: {p.user_name} ({p.beneficiary_name})</option>
+                  ))}
+                </select>
                 <input name="amount" type="number" step="0.01" required placeholder="Amount ($)" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:bg-white border-2 border-transparent focus:border-emerald-100 transition-all text-sm font-bold" />
                 <input type="hidden" name="itemType" value="shared" />
                 <button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95">Log Expense</button>
               </form>
+              
+              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest border-t border-slate-100 pt-6">Recent Expenses</p>
 
               <div className="mt-6 space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
                 {data.expenses.map(e => (
@@ -321,7 +335,12 @@ export default function AdminPage() {
                         <p className="text-[8px] text-emerald-600 font-black uppercase tracking-widest">Participant Paid • Credit Applied</p>
                       )}
                     </div>
-                    <div className="font-black text-slate-900 text-sm">${Number(e.amount).toFixed(2)}</div>
+                    <div className="flex gap-4 items-center">
+                      <div className="font-black text-slate-900 text-sm whitespace-nowrap">${Number(e.amount).toFixed(2)}</div>
+                      <button onClick={async () => { await deleteExpense(e.id); fetchAllData(); }} className="text-red-300 hover:text-red-600 p-1" title="Delete Expense">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
