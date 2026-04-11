@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🕋 Qurbani Participation App
 
-## Getting Started
+A community-focused web application built with **Next.js**, **Tailwind CSS**, and **Supabase** to organize and manage Qurbani (Udhiya) participation for Eid-ul-Adha. 
 
-First, run the development server:
+Inspired by the [Ramadan Iftar App](https://ifter-app.vercel.net), this tool manages the complexity of "shares" for larger animals and coordinates distribution preferences within the community.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Key Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* **Share Management:** Real-time tracking of shares for large animals (7 shares for Cows/Camels).
+* **Live Countdown:** Dynamic timer counting down to Eid-ul-Adha 2026.
+* **Participant Manifest:** Admin dashboard with a "Butcher's List" for easy processing and labeling.
+* **Distribution Tracking:** Options for participants to donate 1/3 or the entire share.
+* **Real-time Updates:** Powered by Supabase to prevent over-booking of animal shares.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠 Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+* **Frontend:** Next.js 15 (App Router), Tailwind CSS (v4)
+* **Backend/DB:** Supabase (PostgreSQL with RLS)
+* **Design:** Emerald Green & Gold (Premium Islamic Aesthetic)
+* **Deployment:** Vercel
 
-## Learn More
+## ⚙️ Setup & Installation
 
-To learn more about Next.js, take a look at the following resources:
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/manirm/qurbani-app.git
+   cd qurbani-app
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. **Environment Variables:**
+   Create a `.env.local` file and add your Supabase credentials:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
 
-## Deploy on Vercel
+4. **Database Schema:**
+   Run the following SQL in your Supabase SQL Editor:
+   ```sql
+   -- 1. Animals Table
+   CREATE TABLE animals (
+     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+     type TEXT NOT NULL,
+     total_shares INTEGER NOT NULL,
+     price_per_share DECIMAL NOT NULL,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   );
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   -- 2. Participants Table
+   CREATE TABLE participants (
+     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+     animal_id UUID REFERENCES animals(id) ON DELETE CASCADE,
+     user_name TEXT NOT NULL,
+     user_email TEXT NOT NULL,
+     shares_taken INTEGER DEFAULT 1,
+     distribution_pref TEXT DEFAULT 'keep_all',
+     paid BOOLEAN DEFAULT FALSE,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   );
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   -- 3. Live Status View
+   CREATE VIEW animal_status AS
+   SELECT 
+     a.id, 
+     a.type, 
+     a.total_shares,
+     COALESCE(SUM(p.shares_taken), 0) as filled_shares
+   FROM animals a
+   LEFT JOIN participants p ON a.id = p.animal_id
+   GROUP BY a.id, a.type, a.total_shares;
+   ```
+
+5. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+
+## 📋 Administration
+Access the management dashboard at `/admin`. Here, organizers can:
+* Monitor booking progress with real-time progress bars.
+* Track payment status (Zelle/Cash).
+* View and export the "Butcher's Manifest" for processing.
