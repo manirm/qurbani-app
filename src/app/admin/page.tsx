@@ -8,7 +8,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice, deleteAnimal, deleteExpense, deleteParticipant, updateAnimalTag } from '@/app/actions';
 import type { AnimalStatus, Participant, Expense, AnimalType } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, naturalSort } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
 export default function AdminPage() {
@@ -21,6 +21,7 @@ export default function AdminPage() {
     expenses: Expense[];
   }>({ animals: [], participants: [], expenses: [] });
   const [loading, setLoading] = useState(true);
+  const [showRawTable, setShowRawTable] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +40,7 @@ export default function AdminPage() {
     const { data: expenses } = await supabase.from('expenses').select('*').order('created_at', { ascending: false });
     
     setData({ 
-      animals: animals || [], 
+      animals: naturalSort(animals || [], a => a.identifier), 
       participants: participants || [], 
       expenses: expenses || [] 
     });
@@ -98,6 +99,7 @@ export default function AdminPage() {
           'Requester': c.name,
           'Phone': c.phone,
           'Beneficiary': p.beneficiary_name,
+          'Father Name': p.father_name || '',
           'Animal': p.animals?.identifier || 'TBD',
           'Share Price (Actual/Adv)': basePrice,
           'Shared Expense Div': dividendPerShare,
@@ -176,7 +178,7 @@ export default function AdminPage() {
           <StatCard icon={<Wallet className="text-emerald-500" />} label="Community Dividend" value={`$${dividendPerShare.toFixed(2)} / share`} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-12">
           {/* Main Manifest */}
           <div className="lg:col-span-3 space-y-8">
             <section className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
@@ -220,7 +222,9 @@ export default function AdminPage() {
                             <div className="space-y-4">
                               {c.shares.map((p: any) => (
                                 <div key={p.id} className="text-[11px] bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                  <div className="font-bold text-primary">{p.beneficiary_name}</div>
+                                  <div className="font-bold text-primary">
+                                    {p.beneficiary_name} {p.father_name ? <span className="text-[9px] text-slate-400 font-normal ml-1">(S/o {p.father_name})</span> : ''}
+                                  </div>
                                   <div className="flex justify-between mt-1 text-slate-500">
                                     <span>{p.animals?.identifier} ({p.animals?.type})</span>
                                     <span className="font-black text-emerald-700 flex items-center">Cash Paid: 
@@ -233,7 +237,24 @@ export default function AdminPage() {
                                         }}
                                         className="w-16 ml-1 mr-2 bg-white border border-slate-200 text-right rounded px-1 outline-none focus:border-secondary"
                                       />
-                                      <button onClick={async () => { if(confirm('Remove this share completely?')) { await deleteParticipant(p.id); fetchAllData(); } }} className="text-red-300 hover:text-red-600 transition-colors" title="Delete Booking">
+                                      <button 
+                                        onClick={async () => { 
+                                          let force = false;
+                                          if (p.amount_paid > 0) {
+                                            if (confirm(`WARNING: This share ($${p.amount_paid}) is already marked as paid. Deleting will remove this payment record. Force delete anyway?`)) {
+                                              force = true;
+                                            } else {
+                                              return;
+                                            }
+                                          } else {
+                                            if (!confirm('Remove this share completely?')) return;
+                                          }
+                                          await deleteParticipant(p.id, force); 
+                                          fetchAllData(); 
+                                        }} 
+                                        className="text-red-300 hover:text-red-600 transition-colors" 
+                                        title="Delete Booking"
+                                      >
                                         <Trash2 size={14} />
                                       </button>
                                     </span>
@@ -325,7 +346,7 @@ export default function AdminPage() {
             <section className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
               <div className="flex items-center gap-3 mb-8">
                 <Receipt className="text-secondary" />
-              <h3 className="text-xl font-bold text-primary tracking-tight">Main Community Expenses</h3>
+                <h3 className="text-xl font-bold text-primary tracking-tight">Main Community Expenses</h3>
               </div>
               <form action={async (fd) => { await addExpense(fd); fetchAllData(); }} className="space-y-4 mb-6">
                 <input name="description" required placeholder="Description (e.g. Slaughterhouse fee)" className="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:bg-white border-2 border-transparent focus:border-emerald-100 transition-all text-sm" />
@@ -362,6 +383,67 @@ export default function AdminPage() {
               </div>
             </section>
           </div>
+        </div>
+
+        {/* Raw Tabular View */}
+        <div className="mb-20">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-primary tracking-tight">Full System Manifest (Raw)</h2>
+            <button 
+              onClick={() => setShowRawTable(!showRawTable)}
+              className="bg-slate-200 text-slate-700 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-300 transition-all"
+            >
+              {showRawTable ? 'Hide Table' : 'Show Full Table'}
+            </button>
+          </div>
+
+          {showRawTable && (
+            <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900 text-white">
+                    <tr className="uppercase tracking-widest font-black">
+                      <th className="px-6 py-4">ID</th>
+                      <th className="px-6 py-4">Requester</th>
+                      <th className="px-6 py-4">Email/Phone</th>
+                      <th className="px-6 py-4">Beneficiary</th>
+                      <th className="px-6 py-4">Father</th>
+                      <th className="px-6 py-4">Animal</th>
+                      <th className="px-6 py-4">Distribution</th>
+                      <th className="px-6 py-4 text-right">Paid</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {data.participants.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-mono text-[10px] text-slate-400">{p.id.slice(0, 8)}...</td>
+                        <td className="px-6 py-4 font-bold text-primary">{p.user_name}</td>
+                        <td className="px-6 py-4 text-slate-500">
+                          {p.user_email}<br/>{p.phone}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-secondary">{p.beneficiary_name}</td>
+                        <td className="px-6 py-4 text-slate-400">{p.father_name || '--'}</td>
+                        <td className="px-6 py-4 font-black uppercase tracking-tighter text-emerald-600">
+                          {p.animals?.identifier} ({p.animals?.type})
+                        </td>
+                        <td className="px-6 py-4 capitalize text-slate-500">{p.distribution_pref.replace('_', ' ')}</td>
+                        <td className="px-6 py-4 text-right font-black text-primary">${p.amount_paid.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={cn(
+                            "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wide",
+                            p.paid ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+                          )}>
+                            {p.paid ? 'PAID' : 'PENDING'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

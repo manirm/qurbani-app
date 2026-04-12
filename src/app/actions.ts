@@ -14,7 +14,13 @@ export async function joinGroup(formData: FormData) {
   const distribution = formData.get('distribution') as string;
   
   // Support for multiple beneficiaries
-  const beneficiaries = formData.getAll('beneficiary') as string[];
+  const names = formData.getAll('beneficiary') as string[];
+  const fatherNames = formData.getAll('fatherName') as string[];
+
+  const beneficiaries = names.map((name, i) => ({
+    name,
+    fatherName: fatherNames[i] || ''
+  }));
 
   // 1. Check current capacity
   const { data: status, error: statusError } = await supabase
@@ -33,12 +39,13 @@ export async function joinGroup(formData: FormData) {
   }
 
   // 2. Insert participants batch
-  const participantsToInsert = beneficiaries.map(beneficiary => ({
+  const participantsToInsert = beneficiaries.map(b => ({
     animal_id: animalId,
     user_name: name,
     user_email: email,
     phone: phone,
-    beneficiary_name: beneficiary,
+    beneficiary_name: b.name,
+    father_name: b.fatherName,
     distribution_pref: distribution,
     shares_taken: 1,
   }));
@@ -194,12 +201,50 @@ export async function deleteExpense(expenseId: string) {
   return { success: true };
 }
 
-export async function deleteParticipant(participantId: string) {
+export async function deleteParticipant(participantId: string, force: boolean = false) {
   const supabase = await createClient();
+  
+  // Check if participant has paid (safety check) - bypass if force is true
+  if (!force) {
+    const { data: participant } = await supabase.from('participants').select('amount_paid').eq('id', participantId).single();
+    if (participant && (participant.amount_paid || 0) > 0) {
+      return { error: 'Cannot withdraw: This share has a recorded payment. Please contact admin to process refund first.' };
+    }
+  }
+
   const { error } = await supabase.from('participants').delete().eq('id', participantId);
   if (error) return { error: error.message };
   
   revalidatePath('/');
+  revalidatePath('/admin');
+  revalidatePath('/lookup');
+  return { success: true };
+}
+
+export async function updateParticipantDetails(participantId: string, data: {
+  user_name: string,
+  user_email: string,
+  phone: string,
+  beneficiary_name: string,
+  father_name: string,
+  distribution_pref: string
+}) {
+  const supabase = await createClient();
+  
+  const { error } = await supabase
+    .from('participants')
+    .update({
+      user_name: data.user_name,
+      user_email: data.user_email,
+      phone: data.phone,
+      beneficiary_name: data.beneficiary_name,
+      father_name: data.father_name,
+      distribution_pref: data.distribution_pref
+    })
+    .eq('id', participantId);
+
+  if (error) return { error: error.message };
+  
   revalidatePath('/admin');
   revalidatePath('/lookup');
   return { success: true };

@@ -17,6 +17,7 @@ export interface Participant {
   user_email: string;
   phone: string;
   beneficiary_name: string;
+  father_name?: string | null;
   shares_taken: number;
   distribution_pref: 'keep_all' | 'donate_third' | 'donate_all';
   amount_paid: number;

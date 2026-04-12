@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, User, Mail, Phone, Calculator, CheckCircle, Clock } from 'lucide-react';
+import { Search, User, Mail, Phone, Calculator, CheckCircle, Clock, Pencil, Trash2, AlertCircle, Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { deleteParticipant } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import EditBookingForm from '@/components/EditBookingForm';
+import type { Participant } from '@/lib/types';
 
 export default function LookupPage() {
   const [query, setQuery] = useState('');
@@ -14,6 +16,9 @@ export default function LookupPage() {
   const [allParticipants, setAllParticipants] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
+  const [isWithdrawing, setIsWithdrawing] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +32,7 @@ export default function LookupPage() {
     const { data: participants } = await supabase
       .from('participants')
       .select('*, animals(type, identifier, advance_price, actual_price)')
-      .or(`user_email.ilike.%${query.toLowerCase()}%,phone.ilike.%${query}%,user_name.ilike.%${query}%`);
+      .or(`user_email.ilike.%${query.toLowerCase()}%,phone.ilike.%${query}%,user_name.ilike.%${query}%,beneficiary_name.ilike.%${query}%,father_name.ilike.%${query}%`);
     
     // 2. Fetch all data for community dividends
     const { data: allExpenses } = await supabase.from('expenses').select('*');
@@ -120,9 +125,21 @@ export default function LookupPage() {
                                 <User size={24} />
                               </div>
                               <div>
-                                <h3 className="text-xl font-bold text-primary leading-none mb-1">{p.beneficiary_name}</h3>
+                                <h3 className="text-xl font-bold text-primary leading-none mb-1">
+                                  {p.beneficiary_name} {p.father_name && <span className="text-xs text-slate-400 font-normal ml-1">(S/o {p.father_name})</span>}
+                                </h3>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Reserved for {p.animals?.identifier || p.animals?.type}</p>
                               </div>
+                            </div>
+
+                            <div className="absolute top-4 right-20 flex gap-2">
+                               <button 
+                                 onClick={() => setEditingParticipant(p)}
+                                 className="p-3 bg-slate-50 text-slate-400 hover:text-secondary hover:bg-white rounded-2xl transition-all shadow-sm border border-slate-100"
+                                 title="Edit Booking"
+                               >
+                                 <Pencil size={16} />
+                               </button>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -157,14 +174,24 @@ export default function LookupPage() {
                               </div>
                               {p.amount_paid === 0 && (
                                 <button
+                                  disabled={!!isWithdrawing}
                                   onClick={async () => {
                                     if (confirm('Are you sure you want to withdraw this share? This action cannot be undone.')) {
-                                      await deleteParticipant(p.id);
-                                      setResults(prev => prev.filter(item => item.id !== p.id));
+                                      setIsWithdrawing(p.id);
+                                      const result = await deleteParticipant(p.id);
+                                      if (result.success) {
+                                        setResults(prev => prev.filter(item => item.id !== p.id));
+                                        setStatusMessage({ type: 'success', text: 'Share withdrawn successfully.' });
+                                      } else {
+                                        setStatusMessage({ type: 'error', text: result.error || 'Withdrawal failed.' });
+                                      }
+                                      setIsWithdrawing(null);
+                                      setTimeout(() => setStatusMessage(null), 5000);
                                     }
                                   }}
-                                  className="w-full text-center py-2 text-[10px] uppercase tracking-widest font-bold text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                                  className="w-full text-center py-2 text-[10px] uppercase tracking-widest font-bold text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center justify-center gap-2"
                                 >
+                                  {isWithdrawing === p.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                                   Withdraw Share
                                 </button>
                               )}
@@ -224,6 +251,36 @@ export default function LookupPage() {
           )}
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {editingParticipant && (
+          <EditBookingForm 
+            participant={editingParticipant}
+            onClose={() => setEditingParticipant(null)}
+            onSuccess={() => {
+              setEditingParticipant(null);
+              handleSearch({ preventDefault: () => {} } as any);
+              setStatusMessage({ type: 'success', text: 'Booking updated successfully.' });
+              setTimeout(() => setStatusMessage(null), 5000);
+            }}
+          />
+        )}
+
+        {statusMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className={cn(
+               "fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border",
+               statusMessage.type === 'success' ? "bg-emerald-600 text-white border-emerald-400/30" : "bg-red-600 text-white border-red-400/30"
+            )}
+          >
+            {statusMessage.type === 'success' ? <CheckCircle className="text-emerald-200" /> : <AlertCircle className="text-red-200" />}
+            <p className="font-bold">{statusMessage.text}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

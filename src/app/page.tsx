@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server';
 import type { AnimalStatus } from '@/lib/types';
 import Link from 'next/link';
 import { UserSearch, Receipt, ArrowRight } from 'lucide-react';
+import { naturalSort } from '@/lib/utils';
 
 // Mock data for fallback
 const MOCK_ANIMALS: AnimalStatus[] = [
@@ -22,11 +23,11 @@ async function getAnimals(): Promise<AnimalStatus[]> {
       .order('type');
     
     if (error || !data || data.length === 0) {
-      return MOCK_ANIMALS;
+      return naturalSort(MOCK_ANIMALS, a => a.identifier);
     }
-    return data as AnimalStatus[];
+    return naturalSort(data as AnimalStatus[], a => a.identifier);
   } catch (e) {
-    return MOCK_ANIMALS;
+    return naturalSort(MOCK_ANIMALS, a => a.identifier);
   }
 }
 
@@ -82,6 +83,35 @@ export default async function Home() {
           </div>
         </div>
         <ClientPage initialAnimals={animals} />
+      </section>
+
+      {/* Payment Info Banner */}
+      <section className="bg-secondary/5 py-16 border-t border-slate-100">
+        <div className="container mx-auto px-6">
+          <div className="max-w-4xl mx-auto bg-white rounded-[3rem] p-8 md:p-12 shadow-xl border border-secondary/10 flex flex-col md:flex-row items-center gap-8">
+            <div className="w-20 h-20 bg-secondary/10 rounded-3xl flex items-center justify-center text-secondary shrink-0">
+              <Receipt size={40} />
+            </div>
+            <div className="grow text-center md:text-left">
+              <h3 className="text-2xl font-black text-primary mb-2 tracking-tight">Deposit Information</h3>
+              <p className="text-slate-500 font-medium mb-6">To confirm your booking, please send the total advance to our community treasurer.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mb-3">Deposit Recipient</p>
+                  <p className="text-lg font-bold text-primary">Br. Mustafizur Rahman</p>
+                </div>
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mb-3">Payment Methods</p>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-primary">Paypal: <span className="text-secondary font-black">309-868-4330</span></p>
+                    <p className="text-sm font-bold text-primary">Zelle: <span className="text-secondary font-black">mustafizur@yahoo.com</span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Trust Banner */}

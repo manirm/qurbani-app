@@ -40,13 +40,19 @@ function SubmitButton({ shareCount, advancePrice }: { shareCount: number, advanc
 export default function JoinForm({ animalId, advancePrice, onClose, onSuccess }: JoinFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [beneficiaries, setBeneficiaries] = useState<string[]>(['']);
+  const [beneficiaries, setBeneficiaries] = useState<{name: string, fatherName: string}[]>([{name: '', fatherName: ''}]);
 
-  const addBeneficiary = () => setBeneficiaries([...beneficiaries, '']);
+  const addBeneficiary = () => setBeneficiaries([...beneficiaries, {name: '', fatherName: ''}]);
   const removeBeneficiary = (index: number) => {
     if (beneficiaries.length > 1) {
       setBeneficiaries(beneficiaries.filter((_, i) => i !== index));
     }
+  };
+
+  const updateBeneficiary = (index: number, field: 'name' | 'fatherName', value: string) => {
+    const newBeneficiaries = [...beneficiaries];
+    newBeneficiaries[index] = { ...newBeneficiaries[index], [field]: value };
+    setBeneficiaries(newBeneficiaries);
   };
 
   async function handleSubmit(formData: FormData) {
@@ -148,26 +154,45 @@ export default function JoinForm({ animalId, advancePrice, onClose, onSuccess }:
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 10 }}
-                      className="flex gap-2 items-center group"
+                      className="flex flex-col gap-4 p-4 bg-foreground/5 rounded-2xl border border-transparent hover:border-secondary/20 transition-all"
                     >
-                      <div className="relative flex-1">
-                        <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1 ml-1">Share {index + 1} for:</label>
-                        <input
-                          required
-                          name="beneficiary"
-                          className="w-full bg-foreground/5 border-2 border-transparent focus:border-secondary/30 focus:bg-white p-4 rounded-2xl outline-none transition-all duration-300 text-sm"
-                          placeholder="Name & Father's Name"
-                        />
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Share {index + 1}</label>
+                        {beneficiaries.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeBeneficiary(index)}
+                            className="p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
-                      {beneficiaries.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeBeneficiary(index)}
-                          className="mt-6 p-3 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      )}
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="relative">
+                          <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1 ml-1">Beneficiary Name</label>
+                          <input
+                            required
+                            name="beneficiary"
+                            value={beneficiaries[index].name}
+                            onChange={(e) => updateBeneficiary(index, 'name', e.target.value)}
+                            className="w-full bg-white/50 border-2 border-transparent focus:border-secondary/30 focus:bg-white p-3 rounded-xl outline-none transition-all duration-300 text-sm"
+                            placeholder="e.g. Abdullah"
+                          />
+                        </div>
+                        <div className="relative">
+                          <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1 ml-1">Father's Name</label>
+                          <input
+                            required
+                            name="fatherName"
+                            value={beneficiaries[index].fatherName}
+                            onChange={(e) => updateBeneficiary(index, 'fatherName', e.target.value)}
+                            className="w-full bg-white/50 border-2 border-transparent focus:border-secondary/30 focus:bg-white p-3 rounded-xl outline-none transition-all duration-300 text-sm"
+                            placeholder="e.g. Abdur Rahman"
+                          />
+                        </div>
+                      </div>
                     </motion.div>
                   ))}
                 </AnimatePresence>
