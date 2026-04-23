@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Search, User, Mail, Phone, Calculator, CheckCircle, Clock, Pencil, Trash2, AlertCircle, Loader2 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
 import { deleteParticipant } from '@/app/actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -10,10 +11,9 @@ import EditBookingForm from '@/components/EditBookingForm';
 import type { Participant } from '@/lib/types';
 
 export default function LookupPage() {
-  const [query, setQuery] = useState('');
+  const [queryStr, setQueryStr] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
-  const [allParticipants, setAllParticipants] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searched, setSearched] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
@@ -22,37 +22,68 @@ export default function LookupPage() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query) return;
+    if (!queryStr) return;
     setIsSearching(true);
     setSearched(true);
     
-    const supabase = createClient();
-    
-    // 1. Fetch participants (Search by name, email, or phone)
-    const { data: participants } = await supabase
-      .from('participants')
-      .select('*, animals(type, identifier, advance_price, actual_price)')
-      .or(`user_email.ilike.%${query.toLowerCase()}%,phone.ilike.%${query}%,user_name.ilike.%${query}%,beneficiary_name.ilike.%${query}%,father_name.ilike.%${query}%`);
-    
-    // 2. Fetch all data for community dividends
-    const { data: allExpenses } = await supabase.from('expenses').select('*');
-    const { data: totalParticipants } = await supabase.from('participants').select('id');
-    
-    const totalCommunityExpenses = (allExpenses || [])
-      .reduce((sum, e) => sum + Number(e.amount), 0);
-    const totalSharesCount = totalParticipants?.length || 0;
-    const dividendPerShare = totalSharesCount > 0 ? totalCommunityExpenses / totalSharesCount : 0;
+    try {
+      const qLower = queryStr.toLowerCase().trim();
+      // Search by any word in the query
+      const searchWord = qLower.split(' ')[0];
 
-    // 3. Calculate expense credits for the searched user
-    // We find all expenses where payer_id is in any of the results' IDs
-    const userResultIds = (participants || []).map(p => p.id);
-    const userExpenseCredits = (allExpenses || [])
-      .filter(e => e.payer_id && userResultIds.includes(e.payer_id))
-      .reduce((sum, e) => sum + Number(e.amount), 0);
+      // 1. Fetch participants using searchTerms array
+      const partQuery = query(
+        collection(db, 'participants'), 
+        where('searchTerms', 'array-contains', searchWord)
+      );
+      const partSnap = await getDocs(partQuery);
+      
+      const participantDocs = partSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    setResults(participants || []);
-    setExpenses([{ id: 'dividend', amount: dividendPerShare, userCredits: userExpenseCredits }]);
-    setIsSearching(false);
+      // 2. Fetch animal data for these participants
+      const animalIds = Array.from(new Set(participantDocs.map((p: any) => p.animal_id)));
+      const animalMap: Record<string, any> = {};
+      
+      await Promise.all(animalIds.map(async (id) => {
+        const aSnap = await getDoc(doc(db, 'animals', id));
+        if (aSnap.exists()) {
+          animalMap[id] = aSnap.data();
+        }
+      }));
+
+      // Join data and refine with client-side filtering for multi-word queries
+      const joinedResults = participantDocs.map((p: any) => ({
+        ...p,
+        animals: animalMap[p.animal_id]
+      })).filter((p: any) => {
+        const fullText = `${p.user_name} ${p.user_email} ${p.phone} ${p.beneficiary_name} ${p.father_name}`.toLowerCase();
+        return fullText.includes(qLower);
+      });
+
+      // 3. Fetch all expenses for community dividends
+      const expSnap = await getDocs(collection(db, 'expenses'));
+      const allExpenses = expSnap.docs.map(d => d.data());
+      
+      const participantsSnap = await getDocs(collection(db, 'participants'));
+      const totalSharesCount = participantsSnap.size;
+      
+      const totalCommunityExpenses = allExpenses
+        .reduce((sum, e) => sum + Number(e.amount), 0);
+      const dividendPerShare = totalSharesCount > 0 ? totalCommunityExpenses / totalSharesCount : 0;
+
+      // 4. Calculate expense credits for the searched user
+      const userResultIds = joinedResults.map(p => p.id);
+      const userExpenseCredits = allExpenses
+        .filter((e: any) => e.payer_id && userResultIds.includes(e.payer_id))
+        .reduce((sum, e) => sum + Number(e.amount), 0);
+
+      setResults(joinedResults);
+      setExpenses([{ id: 'dividend', amount: dividendPerShare, userCredits: userExpenseCredits }]);
+    } catch (err) {
+      console.error('Search error:', err);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const dividendPerShare = expenses[0]?.amount || 0;
@@ -75,8 +106,8 @@ export default function LookupPage() {
             <form onSubmit={handleSearch} className="max-w-2xl mx-auto relative group">
               <input
                 type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                value={queryStr}
+                onChange={(e) => setQueryStr(e.target.value)}
                 placeholder="Name, Email, or Phone (e.g. Manir, 309-XXX...)"
                 className="w-full bg-white/10 backdrop-blur-xl border-2 border-white/20 focus:border-secondary/50 p-6 rounded-[2rem] outline-none text-xl transition-all placeholder:text-white/30 text-white shadow-2xl"
               />

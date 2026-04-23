@@ -1,19 +1,62 @@
 'use server';
 
-import { createClient } from '@/utils/supabase/server';
+import { db } from '@/lib/firebase';
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  runTransaction,
+  serverTimestamp,
+  orderBy,
+  increment,
+  writeBatch
+} from 'firebase/firestore';
 import { revalidatePath } from 'next/cache';
 import type { AnimalType } from '@/lib/types';
 
-export async function joinGroup(formData: FormData) {
-  const supabase = await createClient();
+/**
+ * Helper to generate search terms for broad search in Firestore
+ */
+function generateSearchTerms(data: any): string[] {
+  const terms = new Set<string>();
+  const addTerms = (str: string) => {
+    if (!str) return;
+    const s = str.toLowerCase().trim();
+    // Words and parts
+    const words = s.split(/[\s@.-]+/);
+    words.forEach(word => {
+      if (word.length >= 2) terms.add(word);
+    });
+    // Prefix search terms (first 10 chars)
+    for (let i = 2; i <= Math.min(s.length, 10); i++) {
+      terms.add(s.substring(0, i));
+    }
+    // Full string
+    terms.add(s);
+  };
   
+  addTerms(data.user_name);
+  addTerms(data.user_email);
+  addTerms(data.phone);
+  addTerms(data.beneficiary_name);
+  if (data.father_name) addTerms(data.father_name);
+  
+  return Array.from(terms);
+}
+
+export async function joinGroup(formData: FormData) {
   const animalId = formData.get('animalId') as string;
   const name = formData.get('name') as string;
   const email = formData.get('email') as string;
   const phone = formData.get('phone') as string;
   const distribution = formData.get('distribution') as string;
   
-  // Support for multiple beneficiaries
   const names = formData.getAll('beneficiary') as string[];
   const fatherNames = formData.getAll('fatherName') as string[];
 
@@ -22,230 +65,247 @@ export async function joinGroup(formData: FormData) {
     fatherName: fatherNames[i] || ''
   }));
 
-  // 1. Check current capacity
-  const { data: status, error: statusError } = await supabase
-    .from('animal_status')
-    .select('*')
-    .eq('id', animalId)
-    .single();
+  try {
+    const requestedShares = beneficiaries.length;
 
-  if (statusError || !status) {
-    return { error: 'Could not find the animal group.' };
+    await runTransaction(db, async (transaction) => {
+      const animalRef = doc(db, 'animals', animalId);
+      const animalSnap = await transaction.get(animalRef);
+
+      if (!animalSnap.exists()) {
+        throw new Error('Could not find the animal group.');
+      }
+
+      const animalData = animalSnap.data();
+      const filledShares = animalData.filled_shares || 0;
+      const totalShares = animalData.total_shares;
+
+      if (filledShares + requestedShares > totalShares) {
+        throw new Error(`Not enough slots! Only ${totalShares - filledShares} shares remaining.`);
+      }
+
+      // Add participants
+      for (const b of beneficiaries) {
+        const participantData = {
+          animal_id: animalId,
+          user_name: name,
+          user_email: email,
+          phone: phone,
+          beneficiary_name: b.name,
+          father_name: b.fatherName,
+          distribution_pref: distribution,
+          shares_taken: 1,
+          amount_paid: 0,
+          paid: false,
+          created_at: new Date().toISOString(),
+          searchTerms: generateSearchTerms({
+            user_name: name,
+            user_email: email,
+            phone: phone,
+            beneficiary_name: b.name,
+            father_name: b.fatherName
+          })
+        };
+        const newPartRef = doc(collection(db, 'participants'));
+        transaction.set(newPartRef, participantData);
+      }
+
+      // Update animal capacity
+      transaction.update(animalRef, {
+        filled_shares: increment(requestedShares)
+      });
+    });
+
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/lookup');
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Join error:', error);
+    return { error: error.message || 'Failed to join the group. Please try again.' };
   }
-
-  const requestedShares = beneficiaries.length;
-  if (status.filled_shares + requestedShares > status.total_shares) {
-    return { error: `Not enough slots! Only ${status.total_shares - status.filled_shares} shares remaining.` };
-  }
-
-  // 2. Insert participants batch
-  const participantsToInsert = beneficiaries.map(b => ({
-    animal_id: animalId,
-    user_name: name,
-    user_email: email,
-    phone: phone,
-    beneficiary_name: b.name,
-    father_name: b.fatherName,
-    distribution_pref: distribution,
-    shares_taken: 1,
-  }));
-
-  const { error: insertError } = await supabase
-    .from('participants')
-    .insert(participantsToInsert);
-
-  if (insertError) {
-    console.error('Insert error:', insertError);
-    return { error: 'Failed to join the group. Please try again.' };
-  }
-
-  revalidatePath('/');
-  revalidatePath('/admin');
-  revalidatePath('/lookup');
-  
-  return { success: true };
 }
 
 export async function addAnimal(type: AnimalType) {
-  const supabase = await createClient();
-  
-  // 1. Get current count for this type to auto-number
-  const { count } = await supabase
-    .from('animals')
-    .select('*', { count: 'exact', head: true })
-    .eq('type', type);
+  try {
+    // Get count for identifier
+    const q = query(collection(db, 'animals'), where('type', '==', type));
+    const snap = await getDocs(q);
+    const nextNumber = snap.size + 1;
+    const identifier = `${type}-${nextNumber}`;
 
-  const nextNumber = (count || 0) + 1;
-  const identifier = `${type}-${nextNumber}`;
+    const defaults: Record<AnimalType, { shares: number, advance: number }> = {
+      'Cow': { shares: 7, advance: 500 },
+      'Goat': { shares: 1, advance: 550 },
+      'Sheep': { shares: 1, advance: 400 },
+      'Camel': { shares: 7, advance: 600 }
+    };
 
-  // 2. Set default suggested advance prices
-  const defaults: Record<AnimalType, { shares: number, advance: number }> = {
-    'Cow': { shares: 7, advance: 500 },
-    'Goat': { shares: 1, advance: 550 },
-    'Sheep': { shares: 1, advance: 400 },
-    'Camel': { shares: 7, advance: 600 }
-  };
-
-  const { error } = await supabase
-    .from('animals')
-    .insert([{
+    await addDoc(collection(db, 'animals'), {
       type,
       identifier,
       total_shares: defaults[type].shares,
+      filled_shares: 0,
       advance_price: defaults[type].advance,
-      actual_price: null, // TBD
-      price_per_share: defaults[type].advance // For backward DB compatibility
-    }]);
+      actual_price: null,
+      tag_number: null,
+      created_at: new Date().toISOString()
+    });
 
-  if (error) return { error: error.message };
-  
-  revalidatePath('/');
-  revalidatePath('/admin');
-  return { success: true };
+    revalidatePath('/');
+    revalidatePath('/admin');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function finalizeAnimalPrice(animalId: string, actualPrice: number) {
-  const supabase = await createClient();
-  
-  const { error } = await supabase
-    .from('animals')
-    .update({ actual_price: actualPrice })
-    .eq('id', animalId);
+  try {
+    const animalRef = doc(db, 'animals', animalId);
+    await updateDoc(animalRef, { actual_price: actualPrice });
 
-  if (error) return { error: error.message };
-  
-  revalidatePath('/');
-  revalidatePath('/admin');
-  revalidatePath('/lookup');
-  return { success: true };
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/lookup');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function updateAnimalTag(animalId: string, tagNumber: string) {
-  const supabase = await createClient();
-  
-  const { error } = await supabase
-    .from('animals')
-    .update({ tag_number: tagNumber })
-    .eq('id', animalId);
+  try {
+    const animalRef = doc(db, 'animals', animalId);
+    await updateDoc(animalRef, { tag_number: tagNumber });
 
-  if (error) return { error: error.message };
-  
-  revalidatePath('/admin');
-  revalidatePath('/lookup');
-  return { success: true };
+    revalidatePath('/admin');
+    revalidatePath('/lookup');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function addExpense(formData: FormData) {
-  const supabase = await createClient();
   const description = formData.get('description') as string;
   const amount = parseFloat(formData.get('amount') as string);
   const itemType = formData.get('itemType') as string;
   const payerId = formData.get('payerId') as string | null;
 
-  const { error } = await supabase
-    .from('expenses')
-    .insert([{ 
-      description, 
-      amount, 
+  try {
+    await addDoc(collection(db, 'expenses'), {
+      description,
+      amount,
       item_type: itemType,
-      payer_id: payerId === "" ? null : payerId
-    }]);
+      payer_id: payerId === "" ? null : payerId,
+      created_at: new Date().toISOString()
+    });
 
-  if (error) return { error: error.message };
-  
-  revalidatePath('/admin');
-  revalidatePath('/expenses');
-  revalidatePath('/lookup');
-  return { success: true };
+    revalidatePath('/admin');
+    revalidatePath('/expenses');
+    revalidatePath('/lookup');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function updateParticipantPayment(participantId: string, amount: number) {
-  const supabase = await createClient();
-  
-  const { error } = await supabase
-    .from('participants')
-    .update({ amount_paid: amount, paid: amount > 0 })
-    .eq('id', participantId);
+  try {
+    const partRef = doc(db, 'participants', participantId);
+    await updateDoc(partRef, { 
+      amount_paid: amount, 
+      paid: amount > 0 
+    });
 
-  if (error) return { error: error.message };
-  
-  revalidatePath('/admin');
-  revalidatePath('/lookup');
-  return { success: true };
+    revalidatePath('/admin');
+    revalidatePath('/lookup');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function deleteAnimal(animalId: string) {
-  const supabase = await createClient();
-  
-  // Only allow deleting if no shares are taken (for safety)
-  const { data: status } = await supabase.from('animal_status').select('filled_shares').eq('id', animalId).single();
-  if (status && status.filled_shares > 0) {
-    return { error: 'Cannot delete: This animal has active participants.' };
-  }
+  try {
+    const animalRef = doc(db, 'animals', animalId);
+    const animalSnap = await getDoc(animalRef);
+    
+    if (animalSnap.exists() && (animalSnap.data().filled_shares || 0) > 0) {
+      return { error: 'Cannot delete: This animal has active participants.' };
+    }
 
-  const { error } = await supabase.from('animals').delete().eq('id', animalId);
-  if (error) return { error: error.message };
-  
-  revalidatePath('/');
-  revalidatePath('/admin');
-  return { success: true };
+    await deleteDoc(animalRef);
+    
+    revalidatePath('/');
+    revalidatePath('/admin');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function deleteExpense(expenseId: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
-  if (error) return { error: error.message };
-  
-  revalidatePath('/admin');
-  revalidatePath('/expenses');
-  return { success: true };
+  try {
+    await deleteDoc(doc(db, 'expenses', expenseId));
+    revalidatePath('/admin');
+    revalidatePath('/expenses');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export async function deleteParticipant(participantId: string, force: boolean = false) {
-  const supabase = await createClient();
-  
-  // Check if participant has paid (safety check) - bypass if force is true
-  if (!force) {
-    const { data: participant } = await supabase.from('participants').select('amount_paid').eq('id', participantId).single();
-    if (participant && (participant.amount_paid || 0) > 0) {
+  try {
+    const partRef = doc(db, 'participants', participantId);
+    const partSnap = await getDoc(partRef);
+
+    if (!partSnap.exists()) return { error: 'Participant not found' };
+    const pData = partSnap.data();
+
+    if (!force && (pData.amount_paid || 0) > 0) {
       return { error: 'Cannot withdraw: This share has a recorded payment. Please contact admin to process refund first.' };
     }
-  }
 
-  const { error } = await supabase.from('participants').delete().eq('id', participantId);
-  if (error) return { error: error.message };
-  
-  revalidatePath('/');
-  revalidatePath('/admin');
-  revalidatePath('/lookup');
-  return { success: true };
+    await runTransaction(db, async (transaction) => {
+      const animalRef = doc(db, 'animals', pData.animal_id);
+      transaction.delete(partRef);
+      transaction.update(animalRef, {
+        filled_shares: increment(-1)
+      });
+    });
+
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/lookup');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
-export async function updateParticipantDetails(participantId: string, data: {
-  user_name: string,
-  user_email: string,
-  phone: string,
-  beneficiary_name: string,
-  father_name: string,
-  distribution_pref: string
-}) {
-  const supabase = await createClient();
-  
-  const { error } = await supabase
-    .from('participants')
-    .update({
+export async function updateParticipantDetails(participantId: string, data: any) {
+  try {
+    const partRef = doc(db, 'participants', participantId);
+    const updateData = {
       user_name: data.user_name,
       user_email: data.user_email,
       phone: data.phone,
       beneficiary_name: data.beneficiary_name,
       father_name: data.father_name,
-      distribution_pref: data.distribution_pref
-    })
-    .eq('id', participantId);
+      distribution_pref: data.distribution_pref,
+      searchTerms: generateSearchTerms(data)
+    };
+    
+    await updateDoc(partRef, updateData);
 
-  if (error) return { error: error.message };
-  
-  revalidatePath('/admin');
-  revalidatePath('/lookup');
-  return { success: true };
+    revalidatePath('/admin');
+    revalidatePath('/lookup');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }

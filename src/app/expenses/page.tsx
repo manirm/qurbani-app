@@ -1,16 +1,21 @@
-import { createClient } from '@/utils/supabase/server';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { Receipt, PieChart, Info, ArrowUpRight } from 'lucide-react';
 import type { Expense, Participant } from '@/lib/types';
 
 async function getTransparencyData() {
-  const supabase = await createClient();
-  const { data: expenses } = await supabase.from('expenses').select('*').order('created_at', { ascending: false });
-  const { data: participants } = await supabase.from('participants').select('id');
-  
-  return {
-    expenses: expenses || [],
-    totalShares: participants?.length || 0
-  };
+  try {
+    const expSnap = await getDocs(query(collection(db, 'expenses'), orderBy('created_at', 'desc')));
+    const participantsSnap = await getDocs(collection(db, 'participants'));
+    
+    return {
+      expenses: expSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Expense[],
+      totalShares: participantsSnap.size
+    };
+  } catch (err) {
+    console.error('Error fetching transparency data:', err);
+    return { expenses: [], totalShares: 0 };
+  }
 }
 
 export default async function ExpensesPage() {

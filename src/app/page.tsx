@@ -1,6 +1,7 @@
 import EidCountdown from '@/components/EidCountdown';
 import ClientPage from './client-page';
-import { createClient } from '@/utils/supabase/server';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import type { AnimalStatus } from '@/lib/types';
 import Link from 'next/link';
 import { UserSearch, Receipt, ArrowRight } from 'lucide-react';
@@ -16,17 +17,21 @@ const MOCK_ANIMALS: AnimalStatus[] = [
 
 async function getAnimals(): Promise<AnimalStatus[]> {
   try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('animal_status')
-      .select('*')
-      .order('type');
+    const q = query(collection(db, 'animals'), orderBy('identifier'));
+    const snap = await getDocs(q);
     
-    if (error || !data || data.length === 0) {
+    if (snap.empty) {
       return naturalSort(MOCK_ANIMALS, a => a.identifier);
     }
-    return naturalSort(data as AnimalStatus[], a => a.identifier);
+    
+    const data = snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as AnimalStatus[];
+
+    return naturalSort(data, a => a.identifier);
   } catch (e) {
+    console.error('Error fetching animals:', e);
     return naturalSort(MOCK_ANIMALS, a => a.identifier);
   }
 }

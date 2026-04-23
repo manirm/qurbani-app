@@ -5,7 +5,8 @@ import {
   LayoutDashboard, Users, UserCheck, CreditCard, Printer, 
   Plus, Receipt, DollarSign, Lock, LogOut, Download, PlusCircle, Scale, Wallet, Trash2, ArrowRight
 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
+import { db } from '@/lib/firebase';
+import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { addExpense, updateParticipantPayment, addAnimal, finalizeAnimalPrice, deleteAnimal, deleteExpense, deleteParticipant, updateAnimalTag } from '@/app/actions';
 import type { AnimalStatus, Participant, Expense, AnimalType } from '@/lib/types';
 import { cn, naturalSort } from '@/lib/utils';
@@ -34,17 +35,37 @@ export default function AdminPage() {
   };
 
   const fetchAllData = async () => {
-    const supabase = createClient();
-    const { data: animals } = await supabase.from('animal_status').select('*').order('identifier');
-    const { data: participants } = await supabase.from('participants').select('*, animals(type, identifier, advance_price, actual_price)').order('created_at');
-    const { data: expenses } = await supabase.from('expenses').select('*').order('created_at', { ascending: false });
-    
-    setData({ 
-      animals: naturalSort(animals || [], a => a.identifier), 
-      participants: participants || [], 
-      expenses: expenses || [] 
-    });
-    setLoading(false);
+    try {
+      // 1. Fetch Animals
+      const animalSnap = await getDocs(query(collection(db, 'animals'), orderBy('identifier')));
+      const animalList = animalSnap.docs.map(d => ({ id: d.id, ...d.data() })) as AnimalStatus[];
+      const animalMap = animalList.reduce((acc: any, a) => { acc[a.id] = a; return acc; }, {});
+
+      // 2. Fetch Expenses
+      const expenseSnap = await getDocs(query(collection(db, 'expenses'), orderBy('created_at', 'desc')));
+      const expenseList = expenseSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Expense[];
+
+      // 3. Fetch Participants
+      const partSnap = await getDocs(query(collection(db, 'participants'), orderBy('created_at', 'asc')));
+      const partList = partSnap.docs.map(d => {
+        const p = d.data();
+        return {
+          id: d.id,
+          ...p,
+          animals: animalMap[p.animal_id]
+        };
+      }) as Participant[];
+      
+      setData({ 
+        animals: naturalSort(animalList, a => a.identifier), 
+        participants: partList, 
+        expenses: expenseList 
+      });
+    } catch (err) {
+      console.error('Fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -252,10 +273,10 @@ export default function AdminPage() {
                                           await deleteParticipant(p.id, force); 
                                           fetchAllData(); 
                                         }} 
-                                        className="text-red-300 hover:text-red-600 transition-colors" 
+                                        className="text-slate-300 hover:text-red-600 transition-colors ml-2" 
                                         title="Delete Booking"
                                       >
-                                        <Trash2 size={14} />
+                                        <Trash2 size={16} />
                                       </button>
                                     </span>
                                   </div>
@@ -302,8 +323,8 @@ export default function AdminPage() {
                       <div className="flex gap-2 items-center">
                         <span className="text-[10px] font-bold text-slate-400 italic">Shares: {a.filled_shares}/{a.total_shares}</span>
                         {a.filled_shares === 0 && (
-                          <button onClick={async () => { await deleteAnimal(a.id); fetchAllData(); }} className="text-red-300 hover:text-red-600 transition-colors px-1" title="Delete Unused Animal">
-                            <Trash2 size={12} />
+                          <button onClick={async () => { if (confirm(`Delete ${a.identifier} animal group?`)) { await deleteAnimal(a.id); fetchAllData(); } }} className="text-slate-300 hover:text-red-600 transition-colors px-1" title="Delete Unused Animal">
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>
@@ -374,8 +395,8 @@ export default function AdminPage() {
                     </div>
                     <div className="flex gap-4 items-center">
                       <div className="font-black text-slate-900 text-sm whitespace-nowrap">${Number(e.amount).toFixed(2)}</div>
-                      <button onClick={async () => { await deleteExpense(e.id); fetchAllData(); }} className="text-red-300 hover:text-red-600 p-1" title="Delete Expense">
-                        <Trash2 size={14} />
+                      <button onClick={async () => { if (confirm('Delete this expense?')) { await deleteExpense(e.id); fetchAllData(); } }} className="text-slate-300 hover:text-red-600 p-1" title="Delete Expense">
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
